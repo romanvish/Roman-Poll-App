@@ -1,0 +1,391 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  voter
+  admin
+}
+
+enum UserStatus {
+  pending
+  approved
+  disabled
+}
+
+enum WeekStatus {
+  draft
+  open
+  closed
+  published
+}
+
+enum BallotStatus {
+  draft
+  submitted
+}
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  name           String
+  emailVerified  Boolean    @default(false)
+  image          String?
+  displayName    String?
+  avatarPath     String?
+  favoriteTeamId Int?
+  role           UserRole   @default(voter)
+  status         UserStatus @default(pending)
+  bio            String[]   @default([])
+  tagline        String?
+  title          String?
+  affiliation    String?
+  location       String?
+  specialties    String[]   @default([])
+  links          Json       @default("[]")
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+  favoriteTeam   Team?      @relation(fields: [favoriteTeamId], references: [id], onDelete: SetNull)
+  sessions       Session[]
+  accounts       Account[]
+  ballots        Ballot[]
+  auditLogs      AuditLog[]
+
+  @@index([status, role])
+  @@index([favoriteTeamId])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
+}
+
+model Season {
+  // The initial SQL migration enforces at most one isCurrent=true via a partial unique index.
+  id        String       @id @default(cuid())
+  year      Int          @unique
+  isCurrent Boolean      @default(false)
+  weeks     Week[]
+  teams     SeasonTeam[]
+  games     Game[]
+  syncRuns  SyncLog[]
+
+  @@map("season")
+}
+
+model Week {
+  id          String         @id @default(cuid())
+  seasonId    String
+  number      Int
+  label       String
+  status      WeekStatus     @default(draft)
+  opensAt     DateTime?      @db.Timestamptz(3)
+  deadline    DateTime       @db.Timestamptz(3)
+  publishedAt DateTime?      @db.Timestamptz(3)
+  editorial   Json?
+  season      Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  snapshots   TeamWeekStat[]
+  ballots     Ballot[]
+  results     WeekResult[]
+
+  @@unique([seasonId, number])
+  @@index([status, publishedAt])
+  @@map("week")
+}
+
+model Team {
+  id            Int            @id
+  name          String
+  shortName     String
+  abbreviation  String
+  conference    String?
+  logoUrl       String?
+  color         String?
+  isFbs         Boolean        @default(false)
+  seasons       SeasonTeam[]
+  snapshots     TeamWeekStat[]
+  homeGames     Game[]         @relation("HomeTeam")
+  awayGames     Game[]         @relation("AwayTeam")
+  ballotEntries BallotEntry[]
+  results       WeekResult[]
+  favoriteOf    User[]
+  legacyLinks   LegacyTeam[]
+
+  @@map("team")
+}
+
+model SeasonTeam {
+  seasonId   String
+  teamId     Int
+  conference String?
+  isFbs      Boolean @default(false)
+  isEligible Boolean @default(false)
+  season     Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team       Team    @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@id([seasonId, teamId])
+  @@index([teamId])
+  @@map("season_team")
+}
+
+model TeamWeekStat {
+  teamId       Int
+  weekId       String
+  wins         Int    @default(0)
+  losses       Int    @default(0)
+  confWins     Int    @default(0)
+  confLosses   Int    @default(0)
+  lastResult   Json?
+  nextOpponent Json?
+  extraJson    Json?
+  team         Team   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  week         Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, weekId])
+  @@index([weekId])
+  @@map("team_week_stat")
+}
+
+model Game {
+  id         Int       @id
+  seasonId   String
+  weekNumber Int
+  homeTeamId Int
+  awayTeamId Int
+  homeScore  Int?
+  awayScore  Int?
+  status     String
+  startsAt   DateTime? @db.Timestamptz(3)
+  season     Season    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  homeTeam   Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam   Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+
+  @@index([seasonId, weekNumber])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@map("game")
+}
+
+model Ballot {
+  id                  String        @id @default(cuid())
+  userId              String
+  weekId              String
+  status              BallotStatus  @default(draft)
+  submittedAt         DateTime?     @db.Timestamptz(3)
+  displayNameSnapshot String?
+  updatedAt           DateTime      @updatedAt @db.Timestamptz(3)
+  user                User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  week                Week          @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  entries             BallotEntry[]
+
+  @@unique([userId, weekId])
+  @@index([weekId, status])
+  @@map("ballot")
+}
+
+model BallotEntry {
+  // The initial SQL migration also enforces rank BETWEEN 1 AND 25.
+  ballotId String
+  rank     Int
+  teamId   Int
+  ballot   Ballot @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  team     Team   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@id([ballotId, rank])
+  @@unique([ballotId, teamId])
+  @@index([teamId])
+  @@map("ballot_entry")
+}
+
+model WeekResult {
+  weekId          String
+  teamId          Int
+  rank            Int
+  points          Int
+  firstPlaceVotes Int
+  previousRank    Int?
+  week            Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  team            Team   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@id([weekId, teamId])
+  @@index([weekId, rank])
+  @@index([teamId])
+  @@map("week_result")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String
+  targetType String
+  targetId   String
+  details    Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@map("audit_log")
+}
+
+model LegacyVoter {
+  id          String         @id
+  name        String
+  title       String?
+  affiliation String?
+  photoPath   String?        @map("photo_path")
+  specialties String[]       @default([])
+  bio         String[]       @default([])
+  links       Json           @default("[]")
+  ballots     LegacyBallot[]
+
+  @@map("legacy_voter")
+}
+
+model LegacyTeam {
+  id             String              @id
+  name           String
+  abbreviation   String
+  logoPath       String?             @map("logo_path")
+  providerTeamId Int?                @map("provider_team_id")
+  providerTeam   Team?               @relation(fields: [providerTeamId], references: [id], onDelete: SetNull)
+  ranks          LegacyTeamRank[]
+  ballotEntries  LegacyBallotEntry[]
+
+  @@index([providerTeamId])
+  @@map("legacy_team")
+}
+
+model LegacyEdition {
+  id          String           @id @default(cuid())
+  season      Int
+  week        Int
+  label       String
+  publishedAt DateTime?        @map("published_at") @db.Timestamptz(3)
+  isPublished Boolean          @default(false) @map("is_published")
+  editorial   Json?
+  ballots     LegacyBallot[]
+  ranks       LegacyTeamRank[]
+
+  @@unique([season, week])
+  @@index([isPublished, publishedAt])
+  @@map("legacy_edition")
+}
+
+model LegacyBallot {
+  editionId String              @map("edition_id")
+  voterId   String              @map("voter_id")
+  edition   LegacyEdition       @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  voter     LegacyVoter         @relation(fields: [voterId], references: [id], onDelete: Restrict)
+  entries   LegacyBallotEntry[]
+
+  @@id([editionId, voterId])
+  @@map("legacy_ballot")
+}
+
+model LegacyBallotEntry {
+  editionId String       @map("edition_id")
+  voterId   String       @map("voter_id")
+  rank      Int
+  teamId    String       @map("team_id")
+  ballot    LegacyBallot @relation(fields: [editionId, voterId], references: [editionId, voterId], onDelete: Cascade)
+  team      LegacyTeam   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@id([editionId, voterId, rank])
+  @@unique([editionId, voterId, teamId])
+  @@map("legacy_ballot_entry")
+}
+
+model LegacyTeamRank {
+  id                    String        @id @default(cuid())
+  editionId             String        @map("edition_id")
+  teamId                String        @map("team_id")
+  rank                  Int
+  points                Int
+  firstPlaceVotes       Int           @map("first_place_votes")
+  previousRank          Int?          @map("previous_rank")
+  record                String
+  rankSpread            Int           @map("rank_spread")
+  rankStandardDeviation Float         @map("rank_standard_deviation")
+  averageRank           Float         @map("average_rank")
+  edition               LegacyEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  team                  LegacyTeam    @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@unique([editionId, teamId])
+  @@index([editionId, rank])
+  @@index([teamId, editionId])
+  @@map("legacy_team_rank")
+}
+
+model SyncLog {
+  id        String   @id @default(cuid())
+  seasonId  String?
+  status    String
+  teamCount Int      @default(0)
+  gameCount Int      @default(0)
+  error     String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  season    Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("sync_log")
+}

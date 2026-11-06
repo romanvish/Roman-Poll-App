@@ -1,0 +1,22 @@
+name: roman-poll-app
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: roman_poll
+      POSTGRES_PASSWORD: local_development_only
+      POSTGRES_DB: roman_poll
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roman_poll -d roman_poll"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
