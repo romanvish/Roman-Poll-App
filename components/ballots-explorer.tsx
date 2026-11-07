@@ -28,7 +28,7 @@ export function BallotsExplorer({ ballots, voters }: { ballots: PublicBallot[]; 
       {visible.map((ballot) => <article className="public-ballot-card" key={ballot.voterId}>
         <div className="public-ballot-heading">
           <div className="public-ballot-voter">{profiles.has(ballot.voterId) && <PublicVoterAvatar name={ballot.voter} avatarPath={profiles.get(ballot.voterId)?.avatarPath ?? null} size="small" />}<span><p className="eyebrow">25 teams ranked</p><h3>{profiles.has(ballot.voterId) ? <Link href={`/voters/${encodeURIComponent(ballot.voterId)}`}>{ballot.voter}</Link> : ballot.voter}</h3>{profiles.get(ballot.voterId)?.affiliation && <small>{profiles.get(ballot.voterId)?.affiliation}</small>}</span></div>
-          <details><summary>View ballot</summary><ol className="public-ballot-entries">{ballot.entries.map((entry) => <li key={entry.rank}>
+          <details><summary>View ballot</summary><ol className="public-ballot-entries" aria-label={`${ballot.voter}'s ballot rankings`}>{ballot.entries.map((entry) => <li key={entry.rank}>
             <span className="public-ballot-rank">{entry.rank}</span><strong>{entry.team}</strong><small>{entry.record}</small>
           </li>)}</ol></details>
         </div>

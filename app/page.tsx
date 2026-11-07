@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getLatestPublishedPoll } from "@/lib/server/published-polls";
 import { getPublishedEditionDetails } from "@/lib/server/public-voters";
-import { TeamIdentity } from "@/components/team-identity";
+import { RankingsTable } from "@/components/rankings-table";
 
 export const instant = false;
 
@@ -38,11 +38,7 @@ export default async function Home() {
         <div className="section-heading"><div><p className="eyebrow">The latest edition</p><h2 id="latest-heading">{latestPoll ? `${latestPoll.season}: ${latestPoll.label}` : "The field is wide open."}</h2></div><span className="edition-label">{latestPoll ? `${latestPoll.voters} voters` : "Awaiting publication"}</span></div>
         {latestPoll ? <Card><CardContent className="latest-poll-card">
           {latestDetails?.editorial && <div className="poll-editorial home-editorial"><p className="eyebrow">{latestPoll.season} · {latestPoll.label}</p><h2>{latestDetails.editorial.headline}</h2><p className="poll-editorial-dek">{latestDetails.editorial.dek}</p></div>}
-          <div className="results-table-wrap"><table className="latest-poll-table"><thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>Points</th><th>Firsts</th><th>Movement</th></tr></thead><tbody>{latestPoll.rankings.map((team) => {
-            const details = teamDetails.get(team.team);
-            const movement = team.previousRank === null ? "New" : team.previousRank === team.rank ? "—" : team.rank < team.previousRank ? `↑ ${team.previousRank - team.rank}` : `↓ ${team.rank - team.previousRank}`;
-            return <tr key={`${team.teamId}-${team.rank}`}><td>{team.rank}</td><th scope="row"><TeamIdentity id={details?.teamSlug ?? team.teamId} name={team.team} logoPath={details?.logoPath} /></th><td>{team.record}</td><td>{team.points}</td><td>{team.firstPlaceVotes}</td><td>{movement}</td></tr>;
-          })}</tbody></table></div>
+          <RankingsTable rows={latestPoll.rankings.map((team) => ({ ...team, ...teamDetails.get(team.team) }))} pointsAvailable={latestPoll.voters * 25} />
           <Link href={`/polls/${latestPoll.season}/${latestPoll.week}`} className="text-link">View rankings and every ballot</Link>
         </CardContent></Card> : <Card><CardContent className="empty-state">
           <ClipboardList className="empty-icon" size={34} strokeWidth={1.5} aria-hidden="true" />

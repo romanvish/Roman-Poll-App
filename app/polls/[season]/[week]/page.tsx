@@ -8,6 +8,7 @@ import { getPublicVoters, getPublishedEditionDetails } from "@/lib/server/public
 import { getWeeklySuperlatives } from "@/lib/poll/insights";
 import { WeeklySuperlatives } from "@/components/weekly-superlatives";
 import { TeamIdentity } from "@/components/team-identity";
+import { RankingsTable } from "@/components/rankings-table";
 
 export const instant = false;
 
@@ -36,15 +37,7 @@ export default async function PublishedPollPage({ params }: Props) {
       {edition.editorial.analysis.map((paragraph, index) => <p key={`${index}-${paragraph}`}>{paragraph}</p>)}
       {edition.editorial.highlights.length > 0 && <div className="poll-editorial-highlights">{edition.editorial.highlights.map((highlight) => <article key={`${highlight.label}-${highlight.title}`}><p className="eyebrow">{highlight.label}</p><h3>{highlight.title}</h3><p>{highlight.body}</p></article>)}</div>}
     </section>}
-    <Card><CardContent className="results-table-wrap"><table className="results-table rankings-presentation"><thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>Points</th><th>1st</th><th>Consensus</th><th>Previous</th></tr></thead><tbody>
-      {poll.rankings.map((entry) => {
-        const details = teamDetails.get(entry.team);
-        const movement = entry.previousRank === null ? "New" : entry.previousRank === entry.rank ? "—" : entry.rank < entry.previousRank ? `↑ ${entry.previousRank - entry.rank}` : `↓ ${entry.rank - entry.previousRank}`;
-        const spread = details?.rankSpread;
-        const consensus = spread === undefined ? "—" : spread === 0 ? "Unanimous" : spread <= 5 ? "Close" : "Split";
-        return <tr key={`${entry.teamId}-${entry.rank}`}><td className="rank-cell">{entry.rank}</td><th scope="row"><TeamIdentity id={details?.teamSlug ?? entry.teamId} name={entry.team} logoPath={details?.logoPath} /></th><td>{entry.record}</td><td>{entry.points}</td><td>{entry.firstPlaceVotes}</td><td><span className={`consensus-badge consensus-${consensus.toLowerCase()}`}>{consensus}{spread !== undefined && <small>spread {spread}</small>}</span></td><td>{movement}</td></tr>;
-      })}
-    </tbody></table></CardContent></Card>
+    <Card><CardContent className="results-table-wrap"><RankingsTable rows={poll.rankings.map((entry) => ({ ...entry, ...teamDetails.get(entry.team) }))} pointsAvailable={poll.voters * 25} /></CardContent></Card>
     {poll.othersReceivingVotes.length > 0 && <section className="results-section"><h2>Others receiving votes</h2><ul className="others-receiving-votes">{poll.othersReceivingVotes.map((entry) => {
       const details = teamDetails.get(entry.team);
       return <li key={entry.teamId}><TeamIdentity id={details?.teamSlug ?? entry.teamId} name={entry.team} logoPath={details?.logoPath} /><span>{entry.points} points</span></li>;
